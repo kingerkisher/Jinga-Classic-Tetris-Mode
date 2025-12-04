@@ -131,14 +131,7 @@
             <canvas id="c" width="360" height="720"></canvas>
             <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
                 <!-- MOBILE CONTROL BUTTONS -->
-                <div id="mobile-controls"
-                    style="display:none; gap:6px; margin-top:12px; width:100%; justify-content:center; flex-wrap:wrap;">
-                    <button id="btn-left">◀</button>
-                    <button id="btn-rotate">⤾</button>
-                    <button id="btn-right">▶</button>
-                    <button id="btn-down">▼</button>
-                    <button id="btn-drop">⬇⬇</button>
-                </div>
+
                 <button id="start">Start / Restart</button>
                 <div class="small">Score: <span id="score">0</span></div>
                 <div class="small">Mode: <span id="mode">Classic</span></div>
@@ -152,7 +145,7 @@
                 <strong>Mobile Instructions</strong>
                 <div>• Tap ◀ to move left</div>
                 <div>• Tap ▶ to move right</div>
-                <div>• Tap ⤾ to rotate the brick</div>
+                <div>• Tap ▲ to rotate the brick</div>
                 <div>• Tap ▼ for soft drop</div>
                 <div>• Tap ⬇⬇ for instant hard drop</div>
                 <div class="small">(Swipe gestures are not required — buttons handle all movement.)</div>
@@ -245,24 +238,7 @@
 
             function rotateSquare(mat) { const n = Math.max(mat.length, mat[0].length); const sq = Array.from({ length: n }, () => Array(n).fill(0)); for (let y = 0; y < mat.length; y++) for (let x = 0; x < mat[y].length; x++) sq[y][x] = mat[y][x]; const res = Array.from({ length: n }, () => Array(n).fill(0)); for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) res[x][n - 1 - y] = sq[y][x]; return res; }
 
-            // MOBILE BUTTON EVENTS
-            const btnL = document.getElementById('btn-left');
-            const btnR = document.getElementById('btn-right');
-            const btnD = document.getElementById('btn-down');
-            const btnRot = document.getElementById('btn-rotate');
-            const btnDrop = document.getElementById('btn-drop');
-
-            function mLeft() { if (running && falling && fits(falling, falling.x - 1, falling.y)) falling.x--; }
-            function mRight() { if (running && falling && fits(falling, falling.x + 1, falling.y)) falling.x++; }
-            function mDown() { if (running && falling && fits(falling, falling.x, falling.y + 1)) falling.y++; }
-            function mRotate() { if (running && falling) { const rot = rotateSquare(falling.mat); if (fits(falling, falling.x, falling.y, rot)) falling.mat = rot; } }
-            function mDrop() { if (running && falling) { while (fits(falling, falling.x, falling.y + 1)) falling.y++; commitTetromino(); spawnPiece(); } }
-
-            btnL.onclick = mLeft;
-            btnR.onclick = mRight;
-            btnD.onclick = mDown;
-            btnRot.onclick = mRotate;
-            btnDrop.onclick = mDrop;
+            // Mobile controls removed as requested
 
             startBtn.addEventListener('click', () => { reset(); start(); });
             function reset() { grid = Array.from({ length: ROWS }, () => Array(COLS).fill(0)); falling = null; score = 0; scoreEl.textContent = score; modeEl.textContent = 'Classic'; modeEl.classList.remove('flash-gameover'); dropInterval = 700; lastDrop = 0; }
