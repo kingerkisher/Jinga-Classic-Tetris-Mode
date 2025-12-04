@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Jinga-Tetris — Classic Tetris Mode</title>
+    <style>
+        :root {
+            --bg: #0b1220;
+            --panel: #0f1724;
+            --accent: #ffd166;
+            --muted: #94a3b8
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            margin: 0;
+            background: linear-gradient(180deg, var(--bg), #071026);
+            color: #e6eef8;
+            font-family: Inter, system-ui, Segoe UI, Roboto, Arial;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh
+        }
+
+        .wrap {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        #game {
+            background: var(--panel);        
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 8px 30px rgba(2, 6, 23, .6)
+        }
+
+        canvas {
+            border: 1px solid green ;
+            display: block;
+            background: #081226;
+            border-radius: 8px
+        }
+
+        .sidebar {
+            width: 300px
+        }
+
+        h1 {
+            font-size: 18px;
+            margin: 0 0 8px
+        }
+
+        .info {
+            font-size: 13px;
+            color: var(--muted);
+            margin-bottom: 12px
+        }
+
+        button {
+            background: var(--accent);
+            border: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600
+        }
+
+        .controls {
+            font-size: 13px;
+            color: var(--muted);
+            line-height: 1.7
+        }
+
+        .small {
+            font-size: 12px;
+            color: var(--muted)
+        }
+
+        .flash-gameover {
+            animation: flashGO 0.6s infinite alternate;
+        }
+
+        @keyframes flashGO {
+            from {
+                color: #ff4d4d;
+            }
+
+            to {
+                color: #ffffff;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <div id="game">
+            <h1>Jinga — Classic Tetris Mode</h1>
+            <canvas id="c" width="360" height="720"></canvas>
+            <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+                <button id="start">Start / Restart</button>
+                <div class="small">Score: <span id="score">0</span></div>
+                <div class="small">Mode: <span id="mode">Classic</span></div>
+            </div>
+        </div>
+        <div class="sidebar">
+            <div class="info">Classic Tetris behavior: when a tetromino lands its shape is locked into the grid and
+                <strong>will not</strong> fall into holes. Only complete rows are removed and blocks above shift down.
+            </div>
+            <div class="controls">
+                <strong>Controls</strong>
+                <div>← / → : move piece</div>
+                <div>↑ : rotate</div>
+                <div>↓ : soft drop</div>
+                <div>Space : hard drop</div>
+            </div>
+            <hr />
+            <div style="margin-top:8px">
+                <strong>Notes</strong>
+                <div class="small">• Click removal and per-block gravity removed (classic behavior).</div>
+                <div class="small">• You can tweak drop speed and scoring in the code.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (() => {
+            const canvas = document.getElementById('c');
+            const ctx = canvas.getContext('2d');
+            const COLS = 10, ROWS = 20, SIZE = 36;
+            canvas.width = COLS * SIZE; canvas.height = ROWS * SIZE;
+
+            const startBtn = document.getElementById('start');
+            const scoreEl = document.getElementById('score');
+            const modeEl = document.getElementById('mode');
+
+            const SHAPES = { I: [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]], J: [[1, 0, 0], [1, 1, 1], [0, 0, 0]], L: [[0, 0, 1], [1, 1, 1], [0, 0, 0]], O: [[1, 1], [1, 1]], S: [[0, 1, 1], [1, 1, 0], [0, 0, 0]], Z: [[1, 1, 0], [0, 1, 1], [0, 0, 0]], T: [[0, 1, 0], [1, 1, 1], [0, 0, 0]] };
+            const COLORS = { I: '#6EE7B7', J: '#60A5FA', L: '#F59E0B', O: '#F472B6', S: '#34D399', Z: '#FB7185', T: '#C084FC' };
+
+            let grid = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+            let falling = null; let dropInterval = 700; let lastDrop = 0; let running = false; let score = 0;
+
+            function randShape() { const keys = Object.keys(SHAPES); return keys[Math.floor(Math.random() * keys.length)]; }
+            function makeTetromino(type) { const mat = SHAPES[type].map(r => r.slice()); return { type, mat, w: mat[0].length, h: mat.length, x: Math.floor((COLS - mat[0].length) / 2), y: -1, color: COLORS[type] }; }
+
+            function fits(tet, nx, ny, nmat) { if (!tet) return false; const mat = nmat || tet.mat; for (let y = 0; y < mat.length; y++) for (let x = 0; x < mat[y].length; x++) { if (!mat[y][x]) continue; const gx = nx + x, gy = ny + y; if (gx < 0 || gx >= COLS || gy >= ROWS) return false; if (gy >= 0 && grid[gy][gx]) return false; } return true; }
+
+            function commitTetromino() {
+                if (!falling) return;
+                const t = falling;
+                for (let y = 0; y < t.mat.length; y++) for (let x = 0; x < t.mat[y].length; x++) {
+                    if (t.mat[y][x]) {
+                        const gx = t.x + x, gy = t.y + y;
+                        if (gy >= 0 && gy < ROWS && gx >= 0 && gx < COLS) grid[gy][gx] = t.color;
+                    }
+                }
+                falling = null; score += 10; scoreEl.textContent = score;
+                clearFullLines();
+
+                // GAME OVER CHECK
+                if (grid[0].some(c => c)) { running = false; modeEl.textContent = 'Game Over'; modeEl.classList.add('flash-gameover'); }
+            }
+
+            function spawnPiece() {
+                falling = makeTetromino(randShape());
+                if (!fits(falling, falling.x, falling.y)) {
+                    running = false;
+                    modeEl.textContent = 'Game Over';
+                    modeEl.classList.add('flash-gameover');
+                    falling = null;
+                }
+            }
+
+            function clearFullLines() { let cleared = []; for (let r = 0; r < ROWS; r++) { if (grid[r].every(c => c)) cleared.push(r); } if (cleared.length === 0) return 0; cleared.sort((a, b) => a - b); for (let i = cleared.length - 1; i >= 0; i--) { grid.splice(cleared[i], 1); grid.unshift(Array(COLS).fill(0)); } score += cleared.length * 100; scoreEl.textContent = score; return cleared.length; }
+
+            function update(dt) { if (!running) return; lastDrop += dt; if (lastDrop > dropInterval) { if (falling) { if (fits(falling, falling.x, falling.y + 1)) falling.y++; else { commitTetromino(); spawnPiece(); } } lastDrop = 0; } }
+
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 1;
+                for (let x = 0; x <= COLS; x++) { ctx.beginPath(); ctx.moveTo(x * SIZE, 0); ctx.lineTo(x * SIZE, canvas.height); ctx.stroke(); }
+                for (let y = 0; y <= ROWS; y++) { ctx.beginPath(); ctx.moveTo(0, y * SIZE); ctx.lineTo(canvas.width, y * SIZE); ctx.stroke(); }
+                for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) { if (grid[y][x]) { ctx.fillStyle = grid[y][x]; ctx.fillRect(x * SIZE + 2, y * SIZE + 2, SIZE - 4, SIZE - 4); ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(x * SIZE + 2, y * SIZE + SIZE - 6, SIZE - 4, 4); } }
+                if (falling) { for (let y = 0; y < falling.mat.length; y++) for (let x = 0; x < falling.mat[y].length; x++) { if (falling.mat[y][x]) { const gx = (falling.x + x) * SIZE, gy = (falling.y + y) * SIZE; ctx.fillStyle = falling.color; ctx.fillRect(gx + 2, gy + 2, SIZE - 4, SIZE - 4); } } }
+                ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fillRect(0, canvas.height - 6, canvas.width, 6);
+            }
+
+            document.addEventListener('keydown', e => {
+                if (!running || !falling) return;
+                if (e.key === 'ArrowLeft' && fits(falling, falling.x - 1, falling.y)) falling.x--;
+                if (e.key === 'ArrowRight' && fits(falling, falling.x + 1, falling.y)) falling.x++;
+                if (e.key === 'ArrowDown' && fits(falling, falling.x, falling.y + 1)) falling.y++;
+                if (e.key === 'ArrowUp') { const rotated = rotateSquare(falling.mat); if (fits(falling, falling.x, falling.y, rotated)) falling.mat = rotated; }
+                if (e.code === 'Space') { while (falling && fits(falling, falling.x, falling.y + 1)) falling.y++; commitTetromino(); spawnPiece(); }
+            });
+
+            function rotateSquare(mat) { const n = Math.max(mat.length, mat[0].length); const sq = Array.from({ length: n }, () => Array(n).fill(0)); for (let y = 0; y < mat.length; y++) for (let x = 0; x < mat[y].length; x++) sq[y][x] = mat[y][x]; const res = Array.from({ length: n }, () => Array(n).fill(0)); for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) res[x][n - 1 - y] = sq[y][x]; return res; }
+
+            startBtn.addEventListener('click', () => { reset(); start(); });
+            function reset() { grid = Array.from({ length: ROWS }, () => Array(COLS).fill(0)); falling = null; score = 0; scoreEl.textContent = score; modeEl.textContent = 'Classic'; modeEl.classList.remove('flash-gameover'); dropInterval = 700; lastDrop = 0; }
+            function start() { running = true; spawnPiece(); modeEl.textContent = 'Classic'; loop(performance.now()); }
+            let lastTime = 0; function loop(now) { const dt = now - (lastTime || now); lastTime = now; update(dt); draw(); if (running) requestAnimationFrame(loop); }
+            draw();
+        })();
+    </script>
+</body>
+
+</html>
