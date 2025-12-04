@@ -238,7 +238,30 @@
 
             function rotateSquare(mat) { const n = Math.max(mat.length, mat[0].length); const sq = Array.from({ length: n }, () => Array(n).fill(0)); for (let y = 0; y < mat.length; y++) for (let x = 0; x < mat[y].length; x++) sq[y][x] = mat[y][x]; const res = Array.from({ length: n }, () => Array(n).fill(0)); for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) res[x][n - 1 - y] = sq[y][x]; return res; }
 
-            // Mobile controls removed as requested
+            // Mobile tap controls (left/right/top/down)
+            canvas.addEventListener('touchstart', handleTouch);
+            function handleTouch(e) {
+                if (!running || !falling) return;
+                const rect = canvas.getBoundingClientRect();
+                const touch = e.touches[0];
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+
+                const w = canvas.width;
+                const h = canvas.height;
+
+                // TAP LEFT = move left
+                if (x < w * 0.33) { if (fits(falling, falling.x - 1, falling.y)) falling.x--; return; }
+
+                // TAP RIGHT = move right
+                if (x > w * 0.66) { if (fits(falling, falling.x + 1, falling.y)) falling.x++; return; }
+
+                // TAP TOP = rotate
+                if (y < h * 0.33) { const rotated = rotateSquare(falling.mat); if (fits(falling, falling.x, falling.y, rotated)) falling.mat = rotated; return; }
+
+                // TAP BOTTOM = soft drop
+                if (y > h * 0.66) { if (fits(falling, falling.x, falling.y + 1)) falling.y++; return; }
+            }
 
             startBtn.addEventListener('click', () => { reset(); start(); });
             function reset() { grid = Array.from({ length: ROWS }, () => Array(COLS).fill(0)); falling = null; score = 0; scoreEl.textContent = score; modeEl.textContent = 'Classic'; modeEl.classList.remove('flash-gameover'); dropInterval = 700; lastDrop = 0; }
